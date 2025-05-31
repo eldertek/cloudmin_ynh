@@ -1,0 +1,52 @@
+#!/bin/bash
+
+# Keep this path for calling _common.sh inside the execution's context of backup and restore scripts
+source ../settings/scripts/_common.sh
+source /usr/share/yunohost/helpers
+
+#=================================================
+# DOWNLOAD, CHECK AND UNPACK SOURCE
+#=================================================
+ynh_script_progression "Setting up source files..."
+
+tempdir="$(mktemp -d)"
+# Download, check integrity, uncompress and patch the source from app.src
+ynh_setup_source --dest_dir="$tempdir"
+
+dpkg --install $tempdir/webmin.deb
+
+ynh_safe_rm "$tempdir"
+
+#=================================================
+# RESTORE VARIOUS FILES
+#=================================================
+ynh_script_progression "Restoring various files..."
+
+ynh_restore "/etc/webmin/miniserv.conf"
+
+#=================================================
+# RESTORE SYSTEM CONFIGURATIONS
+#=================================================
+ynh_script_progression "Restoring system configurations related to $app..."
+
+ynh_restore "/etc/nginx/conf.d/$domain.d/$app.conf"
+
+systemctl daemon-reload
+systemctl enable $app.service --quiet
+
+yunohost service add $app --description="Webmin Daemon"
+
+#=================================================
+# RELOAD NGINX AND PHP-FPM OR THE APP SERVICE
+#=================================================
+ynh_script_progression "Reloading NGINX web server and $app's service..."
+
+ynh_systemctl --service=$app --action="restart" --log_path="systemd"
+
+ynh_systemctl --service=nginx --action=reload
+
+#=================================================
+# END OF SCRIPT
+#=================================================
+
+ynh_script_progression "Restoration completed for $app"
